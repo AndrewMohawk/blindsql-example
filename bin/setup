@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+rotate=false
+if [[ "${1:-}" == "--rotate" ]]; then
+  rotate=true
+elif [[ $# -ne 0 ]]; then
+  echo 'usage: bin/setup [--rotate]' >&2
+  exit 2
+fi
+
+if [[ -e .env && "$rotate" == false ]]; then
+  echo '.env already exists; leaving it unchanged'
+  exit 0
+fi
+
+command -v openssl >/dev/null 2>&1 || {
+  echo 'openssl is required to generate challenge secrets' >&2
+  exit 1
+}
+
+umask 077
+admin_password="$(openssl rand -hex 10)"
+challenge_id="$(openssl rand -hex 12)"
+session_secret="$(openssl rand -hex 32)"
+destination=.env
+if [[ "$rotate" == true ]]; then
+  destination=.env.new
+fi
+
+printf 'ADMIN_PASSWORD=%s\nCHALLENGE_FLAG=flag{blind_timing_%s}\nSESSION_SECRET=%s\n' \
+  "$admin_password" "$challenge_id" "$session_secret" > "$destination"
+chmod 600 "$destination"
+
+if [[ "$rotate" == true ]]; then
+  mv "$destination" .env
+  echo 'Rotated challenge credentials, flag, and session key'
+else
+  echo 'Created .env with generated challenge credentials and flag'
+fi
